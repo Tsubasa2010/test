@@ -1,0 +1,193 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="ja">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-JP">
+<title>掲示試験板</title>
+頭
+<style type="text/css"><!--
+div.msg{
+    color:#000000;
+    background-color:#eeffee;
+    border: solid;
+    border-width: 1px 1px 1px 1px;
+    border-color: #000000;
+    margin: 2px 4px 2px 2px;
+    padding: 2px 2px 2px 2px;
+}
+form{
+    color:#000000;
+    background-color:#eeffee;
+    border: solid;
+    border-width: 1px 1px 1px 1px;
+    border-color: #000000;
+    margin: 2px 4px 2px 2px;
+    padding: 2px 2px 2px 2px;
+}
+span.id{
+    font-weight: bold;
+}
+span.subject{
+    font-weight: bold;
+}
+span.name{
+    font-weight: bold;
+}
+span.time{
+    font-size: 75%;
+}
+span.agent{
+    font-size: 75%;
+}
+--></style>
+</head>
+スタイル指定
+<body>
+ボディ開始
+<?php
+//デフォルト値の処理
+if(!$find_offset){
+  $find_offset = "0";
+}
+if(!$find_limit){
+  $find_limit = "20";
+}
+?>
+ここでは表示開始行と表示件数のデフォルト値を設定しています。既に値が設定されているときは上書きしません。$find_offsetと$find_limitはここで初めて出てきます。それなのに既に値が設定されている状況というのは、フォームの値として送られてきたときです。ちなみにデフォルトで検索結果の0行目から20件を表示するように設定しています。
+<h1>掲示試験板</h1>
+
+<p><a href="..">上へ</a> <a href="./index.php">再表示</a></p>
+タイトルなど
+<!--記事登録フォーム-->
+<form action="<?php echo $PHP_SELF; ?>" method="POST">
+  <input type="HIDDEN" name="action" value="regist">
+  <table>
+    <tr><td>名前：</td><td><input type="TEXT"
+      name="name" size="40"></td></tr>
+    <tr><td>題目：</td><td><input type="TEXT"
+      name="subject" size="40"></td></tr>
+    <tr><td>本文：</td><td><textarea
+      name="body" rows="5" cols="52"></textarea></td></tr>
+  </table>
+  <p><input type="SUBMIT" name="Submit" value="書き込み">
+<input type="RESET" name="Reset" value="フォームリセット"></p>
+</form>
+記事登録用フォーム。送信すると$action="regist"となって下にある登録用のコードが実行されます。そのとき変数$nameには名前欄の値が、$subjectには題目、$bodyには本文の値がそれぞれ代入されます。
+<!--検索フォーム-->
+<form action="<?php echo $PHP_SELF; ?>" method="POST">
+  <input type="HIDDEN" name="action" value="find">
+  where：<input type="text" name="find_where" size="40">
+  <br>
+  表示開始：<input type="text" name="find_offset" size="10"
+    value="<?php echo $find_offset; ?>">
+  表示件数：<input type="text" name="find_limit" size="10"
+    value="<?php echo $find_limit; ?>">
+  <input type="SUBMIT" name="Submit" value="再表示">
+</form>
+<hr>
+検索／表示条件指定フォーム。送信すると$actionに"find", $find_whereに検索条件, $find_offsetに表示開始行, $find_limitに表示件数の値がそれぞれ代入された状態で再びこのスクリプトが再表示されます。表示開始欄と表示件数欄は$find_offsetと$find_limitの値で初期化しています。where欄は検索条件を設定するために作りましたがあまり使い道がないかも。
+<!--データベース処理-->
+<?php
+//--定数
+$password = "lsK6adt89"; //管理者パスワード
+$db_name = "bbsdb";        //接続するDB名
+定数の設定
+//--DB接続
+$connect = pg_connect("localhost", "5432", "", "", $db_name);
+if(!$connect) {
+  echo "データベースに接続できませんでした．\n";
+  exit;
+}
+localhostのポート5432にあるPostgreSQLに接続し、データベース$db_nameを開きます。
+//--書き込み処理
+if($action == regist){
+  if($name && $body){
+    $time = date("Y/m/d H:i:s");
+    $agent = getenv("HTTP_USER_AGENT");
+    //本文の加工
+    $body = htmlspecialchars($body);
+    $body = nl2br($body);
+    $body = str_replace("\r", "", $body);
+    $body = str_replace("\n", "", $body);
+    //追加
+    pg_exec($connect, "insert into bbs1"
+      ."(time, name, subject, body, agent)"
+      ."values('$time', '$name', '$subject', '$body', '$agent')");
+
+  }
+}
+$actionがregist、すなわち登録フォームが送信されてきたときは各項目の内容を行挿入のSQL文にして実行します。
+//--削除処理
+if($action == delete){
+  if($delete_id && $pass){
+    if($pass == $password){
+      pg_exec($connect, "delete from bbs1 where id=$delete_id");
+    }
+  }
+}
+$actionがdelete、すなわち削除フォームが送信されてきたときはパスワードのチェックをして指定されたidの行を削除するSQL文を実行します。いざとなればSQLを直接打って削除すればいいのでわざわざ用意する必要はないかも。
+//--問い合わせ文作成
+$query = "select id, subject, name, time, agent, body from bbs1";
+if($find_where){
+  $query .= " where ".$find_where;
+}
+$query .= " order by id DESC";
+if($find_limit){
+  $query .= " limit ".$find_limit;
+}
+if($find_offset){
+  $query .= " offset ".$find_offset;
+}
+メッセージを表示するためのSQL文を作成します。検索フォームの項目が指定されていれば、それをSQL文に追加します。
+//--出力
+if($result = pg_exec($connect, $query)){
+  $row_count = pg_numrows($result);//結果行数
+
+  echo "<p>[".$query."]の結果".$row_count."件を表示</p>";
+
+  $row_index = 0;
+  while($row_index < $row_count){
+    echo "<div class=\"msg\">";
+    echo "<span class=\"id\">".pg_result($result, $row_index, 0)
+          ."</span> : "
+        ."<span class=\"subject\">".pg_result($result, $row_index, 1)
+          ."</span> / "
+        ."<span class=\"name\">".pg_result($result, $row_index, 2)
+          ."</span> "
+        ."<span class=\"time\">(".pg_result($result, $row_index, 3)
+          .")</span> "
+        ."<span class=\"agent\">".pg_result($result, $row_index, 4)
+          ."</span> ";
+    echo "<p>".pg_result($result, $row_index, 5)."</p>";
+    echo "</div>\n";
+
+    $row_index++;
+  }
+}
+先ほど作ったSQL文を実行して結果を出力します。出力する行の範囲はあらかじめlimitとoffsetで指定してあるので、ここでは結果の行を全て出力すればＯＫです。表示範囲を考慮する必要はありません。各列はspan要素で囲ってスタイルシートでスタイルをカスタマイズできるようにしました。
+//--DBクローズ
+pg_close($connect);
+?>
+データベースを閉じます
+<hr>
+<!--次ページ移動フォーム-->
+<form action="<?php echo $PHP_SELF; ?>" method="POST">
+  <input type="HIDDEN" name="action" value="find">
+  <input type="HIDDEN" name="find_limit" value="<?php
+    echo $find_limit; ?>">
+  <input type="HIDDEN" name="find_offset" value="<?php
+    echo $find_offset+$find_limit; ?>">
+  <input type="SUBMIT" name="Submit" value="次の<?php
+    echo $find_limit; ?>件">
+</form>
+次ページボタンフォーム。送信すると$find_offsetが$find_offset+$find_limitになるので、結果的に次のページに行くことになります。ただし、面倒なので次のページが存在しない場合を考慮してません。
+<!--削除用フォーム-->
+<form action="<?php echo $PHP_SELF; ?>" method="POST">
+  <input type="HIDDEN" name="action" value="delete">
+  削除記事番号：<input type="text" NAME="delete_id" size="10">
+  管理パスワード：<input type="password" name="pass" size="10">
+  <input type="SUBMIT" name="Submit" value="削除">
+</form>
+削除用フォーム。送信すると$action="delete"になり、上にある削除用のコードが実行されます。
+</body> </html>
+おしまい。
